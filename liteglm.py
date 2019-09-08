@@ -163,34 +163,35 @@ def _generator( filename, header=None,chunk_size = 100):
     for row in chunk:
         yield row
 
-def irls_incremental_dm(filename, chunksize, b, family=Binomial(), link=Logit(), maxit=25, tol=1e-08, header=None, 
+def irls_incremental_dm(filename, chunksize, yPos=None, family=Binomial(), link=Logit(), maxit=25, tol=1e-08, header=None, 
                      headerNames=None):
-    # filename contains the data after the patsy formula is applied
     x=None
     nRows=chunksize
     tmp=pd.read_csv(filename,delimiter=',', header=None,nrows=1, parse_dates=[1])
-    nCols=tmp.shape[1]
+    nCols=tmp.shape[1]-1
+    if yPos is None:
+        if header is None:
+            yPos = nCols
+        else:
+            yPos = tmp[nCols].to_string(index=False)[1:]
     for j in range(1, maxit+1):
-        k=0
         generator = _generator(filename=filename, header=header,chunk_size = nRows)
         if x is None: x=np.zeros(nCols)
         ATWA = np.zeros((nCols, nCols))
         ATWz = np.zeros(nCols)
         for rowA in generator:
-            A=np.asarray(rowA, dtype=np.float32)
+            yb=np.asarray(rowA[yPos].astype(np.float32))
+            A=np.asarray(rowA.drop([yPos], axis=1), dtype=np.float32)
             eta = np.matmul(A, x)
             eta=eta.reshape(len(eta))
             g = link.inverse(eta)
             mu_eta=link.inverse_deriv
-            gprime  = mu_eta(eta) # gprime = link.inverse_deriv(eta)
-            z = np.array(eta + (b[k:(k+A.shape[0])] - g)/gprime)
-            k=k+A.shape[0]
-            
+            gprime  = mu_eta(eta)
+            z = np.array(eta + (yb - g)/gprime)
             varianceFam=family.variance
             linkinvFam=link.inverse
             g      = linkinvFam(eta)
             varg   = varianceFam(g)
-            
             W=gprime**2 / varg
             W=W.reshape(len(W),1)
             cross2=np.matmul(np.transpose(A), np.asarray(W.reshape(-1)*z))
@@ -207,9 +208,60 @@ def irls_incremental_dm(filename, chunksize, b, family=Binomial(), link=Logit(),
     if headerNames is not None:
         x=pd.DataFrame(x, headerNames)
     elif header is not None:
-        x=pd.DataFrame(x, index =list(rowA))
+        x=pd.DataFrame(x, index =list(rowA.drop([yPos], axis=1)))
     else:
         x=pd.DataFrame(x)
     return (x, j)
 
+
+def chunck_generator2():
+   for chunk in pd.read_csv(chunck_generator2._filename,delimiter=',', iterator=True,header=0, 
+                        chunksize=chunck_generator2._nRows, parse_dates=[1]):
+        yield (chunk)
+
+def irls_incremental(filename, formula, chunksize, family=Binomial(), link=Logit(), maxit=25, tol=1e-08, 
+                     rNames=None, headerNames=None):
+    chunck_generator2._filename=filename
+    chunck_generator2._nRows=chunksize
+    x=None
+    y0, dta = incr_dbuilders('I(use.eq("Y").mul(1)) ~ age + I(age**2) + urban + livch', chunck_generator2)
+    nCols=len(dta.column_names) 
+    if rNames is None:
+        rNames = dta.column_names
+    for j in range(1, maxit+1):
+        if x is None: x=np.zeros(nCols)
+        ATWA = np.zeros((nCols, nCols))
+        ATWz = np.zeros(nCols)
+        for data_chunk in chunck_generator2():
+            yb, rowA = dmatrices((y0, dta), data_chunk, NA_action="drop", return_type="dataframe")
+            yb=yb.values.ravel()
+            A=np.asarray(rowA[rNames], dtype=np.float32)
+            eta = np.matmul(A, x)
+            eta=eta.reshape(len(eta))
+            g = link.inverse(eta)
+            mu_eta=link.inverse_deriv
+            gprime  = mu_eta(eta)
+            z = np.array(eta + (yb - g)/gprime)
+            varianceFam=family.variance
+            linkinvFam=link.inverse
+            g      = linkinvFam(eta)
+            varg   = varianceFam(g)
+            W=gprime**2 / varg
+            W=W.reshape(len(W),1)
+            cross2=np.matmul(np.transpose(A), np.asarray(W.reshape(-1)*z))
+            ATWz = ATWz + cross2
+            cross1=np.matmul(np.transpose(A), np.asarray(W*A))
+            ATWA   = ATWA + cross1
+        xold = x
+        C, rank, piv = cholesky_pivot(ATWA, full_pivot=True)
+        if rank<C.shape[1]:
+            raise LinAlgError("Rank-deficiency detected.")
+        x=solve_triangular(np.transpose(C), ATWz[piv-1], lower=True)
+        x=solve_triangular(C, x, lower=False)[piv-1]
+        if( np.sqrt(np.matmul(np.transpose(x-xold), x-xold)) < tol): break
+    if headerNames is not None:
+        x=pd.DataFrame(x, headerNames)
+    else:
+        x=pd.DataFrame(x, index =list(rowA))
+    return (x, j)
 
