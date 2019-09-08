@@ -1,4 +1,4 @@
-'Intercept', 'age', 'I(age ** 2)', 'urban[T.Y]', 'livch[T.1]', 'livch[T.2]', 'livch[T.3+]'
+Intercept, age, I(age ** 2), urban[T.Y], livch[T.1], livch[T.2], livch[T.3+]
 1,18.44,340.0336,1,0,0,1
 1,-5.5599,30.91248801,1,0,0,0
 1,1.44,2.0736,1,0,1,0
