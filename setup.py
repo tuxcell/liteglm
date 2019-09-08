@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="liteglm",
-    version="0.0.1",
+    version="0.0.2",
     author="Jose Gama",
     author_email="josephgama@yahoo.com",
     description="GLM methods for robust or incremental GLM, based on Mike Kane and Bryan W. Lewis code",
