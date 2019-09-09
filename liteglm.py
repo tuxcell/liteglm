@@ -4,6 +4,7 @@ from statsmodels.genmod.families.family import Binomial
 from statsmodels.genmod.families.links import Logit
 from scipy.linalg import svd, solve_triangular, qr, cholesky
 import patsy
+from patsy import incr_dbuilder, incr_dbuilders, build_design_matrices, dmatrix, dmatrices
 from cholesky_pivot import cholesky_pivot
 
 def glm_svd_newton(data, formula, y, family=Binomial(), link=Logit(), maxit=25, tol=1e-08,stol=1e-08,singular_ok=True,
@@ -78,6 +79,7 @@ def glm_svd_newton(data, formula, y, family=Binomial(), link=Logit(), maxit=25, 
     inV=1/S[1]
     if(reg_method == "minimum norm"): inV[inV > 1/stol] = 1
     x[idx] = np.matmul(S[2].T, (s*inV).reshape(-1,1)).reshape(-1)
+    x=pd.DataFrame(x, list(X))
     return(x, j+1, k, pivot) # coefficients=x,iterations=j, rank=k, pivot=pivot
 
 def glm_svd_newton_dm(X, y, family=Binomial(), link=Logit(), maxit=25, tol=1e-08,stol=1e-08,singular_ok=True,
@@ -151,6 +153,7 @@ def glm_svd_newton_dm(X, y, family=Binomial(), link=Logit(), maxit=25, tol=1e-08
     inV=1/S[1]
     if(reg_method == "minimum norm"): inV[inV > 1/stol] = 1
     x[idx] = np.matmul(S[2].T, (s*inV).reshape(-1,1)).reshape(-1)
+    x=pd.DataFrame(x, list(X))
     return(x, j+1, k, pivot) # coefficients=x,iterations=j, rank=k, pivot=pivot
 
 def chunck_generator(filename, header,chunk_size ):
